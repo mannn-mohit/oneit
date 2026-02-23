@@ -9,6 +9,7 @@ export default function RolesAdminPage() {
     const [permissions, setPermissions] = useState<Permission[]>([]);
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
+    const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
     const [form, setForm] = useState({ name: '', description: '', permission_ids: [] as string[] });
     const [error, setError] = useState('');
 
@@ -22,16 +23,41 @@ export default function RolesAdminPage() {
 
     useEffect(() => { fetchData(); }, []);
 
-    const handleCreate = async (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
         try {
-            await api.createRole(form);
+            if (editingRoleId) {
+                await api.updateRole(editingRoleId, form);
+            } else {
+                await api.createRole(form);
+            }
             setShowForm(false);
+            setEditingRoleId(null);
             setForm({ name: '', description: '', permission_ids: [] });
             fetchData();
         } catch (err: unknown) {
-            setError(err instanceof Error ? err.message : 'Failed to create role');
+            setError(err instanceof Error ? err.message : `Failed to ${editingRoleId ? 'update' : 'create'} role`);
+        }
+    };
+
+    const handleEdit = (role: Role) => {
+        setForm({
+            name: role.name,
+            description: role.description || '',
+            permission_ids: role.permissions.map((p) => p.id),
+        });
+        setEditingRoleId(role.id);
+        setShowForm(true);
+    };
+
+    const handleDelete = async (id: string) => {
+        if (!confirm('Are you sure you want to delete this role?')) return;
+        try {
+            await api.deleteRole(id);
+            fetchData();
+        } catch (err: unknown) {
+            alert(err instanceof Error ? err.message : 'Failed to delete role');
         }
     };
 
@@ -56,7 +82,7 @@ export default function RolesAdminPage() {
 
             <div className="p-6 animate-fadeIn">
                 <div className="mb-6 flex justify-end">
-                    <button onClick={() => setShowForm(!showForm)}
+                    <button onClick={() => { setForm({ name: '', description: '', permission_ids: [] }); setEditingRoleId(null); setShowForm(!showForm); }}
                         className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-purple-600 text-white text-sm font-medium rounded-xl hover:from-blue-600 hover:to-purple-700 shadow-lg shadow-blue-500/20">
                         + Add Role
                     </button>
@@ -64,7 +90,7 @@ export default function RolesAdminPage() {
 
                 {showForm && (
                     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 mb-6 animate-fadeIn">
-                        <form onSubmit={handleCreate} className="space-y-4">
+                        <form onSubmit={handleSubmit} className="space-y-4">
                             {error && <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">{error}</div>}
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
@@ -102,8 +128,8 @@ export default function RolesAdminPage() {
                                 </div>
                             </div>
                             <div className="flex gap-2">
-                                <button type="submit" className="px-5 py-2 bg-blue-600 text-white text-sm font-medium rounded-xl">Create Role</button>
-                                <button type="button" onClick={() => setShowForm(false)} className="px-5 py-2 bg-slate-200 text-slate-700 text-sm font-medium rounded-xl">Cancel</button>
+                                <button type="submit" className="px-5 py-2 bg-blue-600 text-white text-sm font-medium rounded-xl">{editingRoleId ? 'Update Role' : 'Create Role'}</button>
+                                <button type="button" onClick={() => { setShowForm(false); setEditingRoleId(null); setForm({ name: '', description: '', permission_ids: [] }); }} className="px-5 py-2 bg-slate-200 text-slate-700 text-sm font-medium rounded-xl">Cancel</button>
                             </div>
                         </form>
                     </div>
@@ -119,9 +145,17 @@ export default function RolesAdminPage() {
                                     <h3 className="font-semibold text-slate-800">{role.name}</h3>
                                     <p className="text-sm text-slate-500">{role.description || 'No description'}</p>
                                 </div>
-                                {role.is_system && (
-                                    <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-xs font-medium rounded-full">System</span>
-                                )}
+                                <div className="flex flex-col items-end gap-2">
+                                    {role.is_system && (
+                                        <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-xs font-medium rounded-full mb-1">System</span>
+                                    )}
+                                    {!role.is_system && (
+                                        <div className="flex items-center gap-2">
+                                            <button onClick={() => handleEdit(role)} className="px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">Edit</button>
+                                            <button onClick={() => handleDelete(role.id)} className="px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors">Delete</button>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                             <div className="flex flex-wrap gap-1.5">
                                 {role.permissions.slice(0, 6).map((p) => (

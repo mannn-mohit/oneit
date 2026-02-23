@@ -60,6 +60,7 @@ class TicketService:
         assigned_to: Optional[UUID] = None,
         created_by: Optional[UUID] = None,
         search: Optional[str] = None,
+        viewer_id: Optional[UUID] = None,
     ) -> tuple:
         """Get paginated list of tickets with filters."""
         query = db.query(Ticket).options(
@@ -68,14 +69,18 @@ class TicketService:
             joinedload(Ticket.assets),
         )
 
+        if viewer_id:
+            query = query.filter((Ticket.created_by == viewer_id) | (Ticket.assigned_to == viewer_id))
+        else:
+            if assigned_to:
+                query = query.filter(Ticket.assigned_to == assigned_to)
+            if created_by:
+                query = query.filter(Ticket.created_by == created_by)
+
         if status:
             query = query.filter(Ticket.status == status)
         if priority:
             query = query.filter(Ticket.priority == priority)
-        if assigned_to:
-            query = query.filter(Ticket.assigned_to == assigned_to)
-        if created_by:
-            query = query.filter(Ticket.created_by == created_by)
         if search:
             search_term = f"%{search}%"
             query = query.filter(
@@ -142,16 +147,20 @@ class TicketService:
         return ticket
 
     @staticmethod
-    def get_ticket_stats(db: Session) -> dict:
+    def get_ticket_stats(db: Session, viewer_id: Optional[UUID] = None) -> dict:
         """Get ticket statistics for the dashboard."""
-        total = db.query(func.count(Ticket.id)).scalar()
-        open_count = db.query(func.count(Ticket.id)).filter(Ticket.status == "open").scalar()
-        in_progress = db.query(func.count(Ticket.id)).filter(Ticket.status == "in_progress").scalar()
-        resolved = db.query(func.count(Ticket.id)).filter(Ticket.status == "resolved").scalar()
+        base_query = db.query(Ticket)
+        if viewer_id:
+            base_query = base_query.filter((Ticket.created_by == viewer_id) | (Ticket.assigned_to == viewer_id))
+
+        total = base_query.with_entities(func.count(Ticket.id)).scalar()
+        open_count = base_query.with_entities(func.count(Ticket.id)).filter(Ticket.status == "open").scalar()
+        in_progress = base_query.with_entities(func.count(Ticket.id)).filter(Ticket.status == "in_progress").scalar()
+        resolved = base_query.with_entities(func.count(Ticket.id)).filter(Ticket.status == "resolved").scalar()
 
         # Overdue tickets
         now = datetime.now(timezone.utc)
-        overdue = db.query(func.count(Ticket.id)).filter(
+        overdue = base_query.with_entities(func.count(Ticket.id)).filter(
             Ticket.sla_due_at < now,
             Ticket.status.in_(["open", "in_progress"]),
         ).scalar()

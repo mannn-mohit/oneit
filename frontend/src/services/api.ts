@@ -162,6 +162,13 @@ class ApiClient {
         return this.request<AssetStats>('/api/assets/stats');
     }
 
+    async bulkImportAssets(data: { assets: any[] }) {
+        return this.request<{ imported: number }>('/api/assets/bulk-import', {
+            method: 'POST',
+            body: data
+        });
+    }
+
     // Asset Types
     async getAssetTypes() {
         return this.request<AssetTypeListResponse>('/api/asset-types/');
@@ -205,9 +212,127 @@ class ApiClient {
         return this.request<TicketStats>('/api/tickets/stats');
     }
 
+    // Marketplace
+    async getApps() {
+        return this.request<AppIntegration[]>('/api/marketplace/');
+    }
+
+    async installApp(id: string) {
+        return this.request<AppIntegration>(`/api/marketplace/${id}/install`, { method: 'POST' });
+    }
+
+    async uninstallApp(id: string) {
+        return this.request<AppIntegration>(`/api/marketplace/${id}/uninstall`, { method: 'POST' });
+    }
+
+    async configureApp(id: string, config: { webhook_url?: string; api_key?: string }) {
+        return this.request<AppIntegration>(`/api/marketplace/${id}/configure`, {
+            method: 'POST',
+            body: config,
+        });
+    }
+
     // Health
     async healthCheck() {
         return this.request<{ status: string }>('/api/health');
+    }
+
+    // Settings
+    async getSettings() {
+        return this.request<{ app_name: string, app_icon: string }>('/api/settings/');
+    }
+
+    async updateSettings(data: { app_name: string, app_icon: string }) {
+        return this.request<{ app_name: string, app_icon: string }>('/api/settings/', {
+            method: 'PUT',
+            body: data,
+        });
+    }
+
+    // Components
+    async getComponents(params?: QueryParams) {
+        const query = buildQuery(params);
+        return this.request<Component[]>(`/api/components/${query}`);
+    }
+    async getComponent(id: string) {
+        return this.request<Component>(`/api/components/${id}`);
+    }
+    async createComponent(data: Partial<Component>) {
+        return this.request<Component>('/api/components/', { method: 'POST', body: data });
+    }
+    async updateComponent(id: string, data: Partial<Component>) {
+        return this.request<Component>(`/api/components/${id}`, { method: 'PUT', body: data });
+    }
+    async deleteComponent(id: string) {
+        return this.request(`/api/components/${id}`, { method: 'DELETE' });
+    }
+    async checkoutComponent(id: string, data: { asset_id: string; qty: number }) {
+        return this.request(`/api/components/${id}/checkout`, { method: 'POST', body: data });
+    }
+
+    // Accessories
+    async getAccessories(params?: QueryParams) {
+        const query = buildQuery(params);
+        return this.request<Accessory[]>(`/api/accessories/${query}`);
+    }
+    async getAccessory(id: string) {
+        return this.request<Accessory>(`/api/accessories/${id}`);
+    }
+    async createAccessory(data: Partial<Accessory>) {
+        return this.request<Accessory>('/api/accessories/', { method: 'POST', body: data });
+    }
+    async updateAccessory(id: string, data: Partial<Accessory>) {
+        return this.request<Accessory>(`/api/accessories/${id}`, { method: 'PUT', body: data });
+    }
+    async deleteAccessory(id: string) {
+        return this.request(`/api/accessories/${id}`, { method: 'DELETE' });
+    }
+    async checkoutAccessory(id: string, data: { user_id: string; qty: number }) {
+        return this.request(`/api/accessories/${id}/checkout`, { method: 'POST', body: data });
+    }
+
+    // Imports (generic)
+    async previewImport(entityType: string, file: File) {
+        const token = this.getToken();
+        const form = new FormData();
+        form.append('file', file);
+
+        const response = await fetch(`${this.baseUrl}/api/imports/${entityType}/preview`, {
+            method: 'POST',
+            headers: token ? { 'Authorization': `Bearer ${token}` } : undefined,
+            body: form,
+        });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ detail: 'Preview failed' }));
+            throw new Error(error.detail || `HTTP ${response.status}`);
+        }
+        return response.json() as Promise<ImportPreviewResponse>;
+    }
+
+    async executeImport(entityType: string, file: File, request: ImportExecuteRequest) {
+        const token = this.getToken();
+        const form = new FormData();
+        form.append('file', file);
+        form.append('request_json', JSON.stringify(request));
+        if (request.create_missing_columns !== undefined) {
+            form.append('create_missing_columns', String(request.create_missing_columns));
+        }
+        if (request.store_row_results !== undefined) {
+            form.append('store_row_results', String(request.store_row_results));
+        }
+
+        const response = await fetch(`${this.baseUrl}/api/imports/${entityType}/execute`, {
+            method: 'POST',
+            headers: token ? { 'Authorization': `Bearer ${token}` } : undefined,
+            body: form,
+        });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ detail: 'Import failed' }));
+            throw new Error(error.detail || `HTTP ${response.status}`);
+        }
+        return response.json() as Promise<ImportJobResponse>;
     }
 }
 
@@ -234,6 +359,7 @@ export interface User {
     role_id: string | null;
     role_name: string | null;
     sso_provider: string | null;
+    permissions?: string[] | null;
     created_at: string;
     last_login: string | null;
 }
@@ -434,6 +560,80 @@ export interface QueryParams {
     assigned_to?: string;
     is_active?: boolean;
     [key: string]: unknown;
+}
+
+export interface AppIntegration {
+    id: string;
+    name: string;
+    description: string;
+    icon: string;
+    is_installed: boolean;
+    is_configured: boolean;
+}
+
+export interface Component {
+    id: string;
+    name: string;
+    category?: string;
+    serial_number?: string;
+    total_qty: number;
+    available_qty: number;
+    cost?: string;
+    notes?: string;
+    created_at: string;
+}
+
+export interface Accessory {
+    id: string;
+    name: string;
+    category?: string;
+    total_qty: number;
+    available_qty: number;
+    cost?: string;
+    notes?: string;
+    created_at: string;
+}
+
+// Imports
+export interface ImportColumnSuggestion {
+    csv_header: string;
+    suggested_field: string | null;
+    is_existing_field: boolean;
+}
+
+export interface ImportPreviewResponse {
+    entity_type: string;
+    headers: string[];
+    sample_rows: Record<string, unknown>[];
+    existing_fields: string[];
+    suggestions: ImportColumnSuggestion[];
+}
+
+export interface ImportMappingRequest {
+    csv_header: string;
+    model_field?: string | null;
+    create_new_column?: boolean;
+    inferred_db_type?: string | null;
+}
+
+export interface ImportExecuteRequest {
+    mappings: ImportMappingRequest[];
+    create_missing_columns?: boolean;
+    store_row_results?: boolean;
+}
+
+export interface ImportJobResponse {
+    id: string;
+    entity_type: string;
+    status: string;
+    original_filename?: string | null;
+    created_by: string;
+    total_rows: number;
+    success_count: number;
+    error_count: number;
+    summary: Record<string, unknown>;
+    created_at: string;
+    updated_at: string;
 }
 
 export const api = new ApiClient(API_BASE);

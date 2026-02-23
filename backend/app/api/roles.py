@@ -11,7 +11,7 @@ from app.models.user import User
 from app.schemas.role_ticket import (
     RoleCreate, RoleUpdate, RoleResponse, RoleListResponse, PermissionResponse,
 )
-from app.api.deps import get_current_user, require_superadmin
+from app.api.deps import require_permissions
 
 router = APIRouter()
 
@@ -19,7 +19,7 @@ router = APIRouter()
 @router.get("/", response_model=RoleListResponse)
 async def list_roles(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permissions("roles:read")),
 ):
     """List all roles."""
     roles = db.query(Role).all()
@@ -52,7 +52,7 @@ async def list_roles(
 async def create_role(
     role_data: RoleCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_superadmin),
+    current_user: User = Depends(require_permissions("roles:manage")),
 ):
     """Create a new role (admin only)."""
     existing = db.query(Role).filter(Role.name == role_data.name).first()
@@ -92,14 +92,12 @@ async def update_role(
     role_id: UUID,
     update_data: RoleUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_superadmin),
+    current_user: User = Depends(require_permissions("roles:manage")),
 ):
     """Update a role (admin only)."""
     role = db.query(Role).filter(Role.id == role_id).first()
     if not role:
         raise HTTPException(status_code=404, detail="Role not found")
-    if role.is_system:
-        raise HTTPException(status_code=400, detail="System roles cannot be modified")
 
     if update_data.name is not None:
         role.name = update_data.name
@@ -134,14 +132,13 @@ async def update_role(
 async def delete_role(
     role_id: UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_superadmin),
+    current_user: User = Depends(require_permissions("roles:manage")),
 ):
     """Delete a role (admin only)."""
     role = db.query(Role).filter(Role.id == role_id).first()
     if not role:
         raise HTTPException(status_code=404, detail="Role not found")
-    if role.is_system:
-        raise HTTPException(status_code=400, detail="System roles cannot be deleted")
+    
     db.delete(role)
     db.commit()
 
@@ -149,7 +146,7 @@ async def delete_role(
 @router.get("/permissions", response_model=list[PermissionResponse])
 async def list_permissions(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permissions("roles:read")),
 ):
     """List all available permissions."""
     permissions = db.query(Permission).all()

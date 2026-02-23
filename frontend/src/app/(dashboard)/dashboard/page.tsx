@@ -5,6 +5,8 @@ import TopBar from '@/components/TopBar';
 import StatCard from '@/components/StatCard';
 import StatusBadge from '@/components/StatusBadge';
 import api, { AssetStats, TicketStats, Ticket, Asset } from '@/services/api';
+import { useAuth } from '@/hooks/useAuth';
+import { hasPermission } from '@/utils/permissions';
 
 export default function DashboardPage() {
     const [assetStats, setAssetStats] = useState<AssetStats | null>(null);
@@ -12,6 +14,7 @@ export default function DashboardPage() {
     const [recentTickets, setRecentTickets] = useState<Ticket[]>([]);
     const [recentAssets, setRecentAssets] = useState<Asset[]>([]);
     const [loading, setLoading] = useState(true);
+    const { user } = useAuth();
 
     useEffect(() => {
         Promise.all([
@@ -107,10 +110,10 @@ export default function DashboardPage() {
                         <h3 className="text-sm font-semibold text-slate-500 mb-4">Quick Actions</h3>
                         <div className="space-y-2">
                             {[
-                                { label: 'Add New Asset', href: '/assets/new', icon: '+' },
-                                { label: 'Create Ticket', href: '/tickets/new', icon: '+' },
-                                { label: 'Manage Users', href: '/admin/users', icon: '→' },
-                            ].map((action) => (
+                                hasPermission(user, 'assets:create') ? { label: 'Add New Asset', href: '/assets/new', icon: '+' } : null,
+                                hasPermission(user, 'tickets:create') ? { label: 'Create Ticket', href: '/tickets/new', icon: '+' } : null,
+                                hasPermission(user, 'users:read') ? { label: 'Manage Users', href: '/admin/users', icon: '→' } : null,
+                            ].filter(Boolean).map((action: any) => (
                                 <a
                                     key={action.label}
                                     href={action.href}

@@ -5,8 +5,11 @@ import Link from 'next/link';
 import TopBar from '@/components/TopBar';
 import StatusBadge from '@/components/StatusBadge';
 import api, { Asset, AssetType } from '@/services/api';
+import { useAuth } from '@/hooks/useAuth';
+import { hasPermission } from '@/utils/permissions';
 
 export default function AssetsPage() {
+    const { user } = useAuth();
     const [assets, setAssets] = useState<Asset[]>([]);
     const [assetTypes, setAssetTypes] = useState<AssetType[]>([]);
     const [total, setTotal] = useState(0);
@@ -14,6 +17,10 @@ export default function AssetsPage() {
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
     const [typeFilter, setTypeFilter] = useState('');
+
+    const canCreate = hasPermission(user, 'assets:create');
+    const canImport = user?.is_superadmin ?? false;
+    const canDelete = hasPermission(user, 'assets:delete');
 
     const fetchAssets = async () => {
         setLoading(true);
@@ -75,12 +82,25 @@ export default function AssetsPage() {
                                 <option key={t.id} value={t.id}>{t.name}</option>
                             ))}
                         </select>
-                        <Link
-                            href="/assets/new"
-                            className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-purple-600 text-white text-sm font-medium rounded-xl hover:from-blue-600 hover:to-purple-700 shadow-lg shadow-blue-500/20 whitespace-nowrap"
-                        >
-                            + Add Asset
-                        </Link>
+                        <div className="flex gap-2 ml-auto">
+                            {canImport && (
+                                <Link
+                                    href="/admin/imports?entity=assets"
+                                    className="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 text-sm font-medium rounded-xl hover:bg-slate-50 shadow-sm whitespace-nowrap"
+                                >
+                                    Import CSV
+                                </Link>
+                            )}
+
+                            {canCreate && (
+                                <Link
+                                    href="/assets/new"
+                                    className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-purple-600 text-white text-sm font-medium rounded-xl hover:from-blue-600 hover:to-purple-700 shadow-lg shadow-blue-500/20 whitespace-nowrap"
+                                >
+                                    + Add Asset
+                                </Link>
+                            )}
+                        </div>
                     </div>
                 </div>
 
@@ -116,8 +136,10 @@ export default function AssetsPage() {
                                             <td className="px-6 py-4 text-sm text-slate-600">{asset.assigned_to_name || '—'}</td>
                                             <td className="px-6 py-4 text-right">
                                                 <div className="flex items-center justify-end gap-2">
-                                                    <Link href={`/assets/${asset.id}`} className="px-3 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-lg">Edit</Link>
-                                                    <button onClick={() => handleDelete(asset.id)} className="px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg">Delete</button>
+                                                    <Link href={`/assets/${asset.id}`} className="px-3 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-lg">View</Link>
+                                                    {canDelete && (
+                                                        <button onClick={() => handleDelete(asset.id)} className="px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg">Delete</button>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>

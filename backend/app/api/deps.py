@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import oauth2_scheme, decode_access_token
+from app.core.rbac import check_permission
 from app.models.user import User
 
 
@@ -45,3 +46,47 @@ def require_superadmin(current_user: User = Depends(get_current_user)) -> User:
             detail="Superadmin access required",
         )
     return current_user
+
+
+def require_permissions(*required_permissions: str):
+    """
+    Dependency factory that requires the current user to have all permissions.
+
+    Usage:
+        current_user: User = Depends(require_permissions("assets:read"))
+    """
+    def dependency(current_user: User = Depends(get_current_user)) -> User:
+        if current_user.is_superadmin:
+            return current_user
+
+        missing = [p for p in required_permissions if not check_permission(current_user, p)]
+        if missing:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Missing permissions: {', '.join(missing)}",
+            )
+        return current_user
+
+    return dependency
+
+
+def require_any_permissions(*any_permissions: str):
+    """
+    Dependency factory that requires the current user to have at least one permission.
+
+    Usage:
+        current_user: User = Depends(require_any_permissions("assets:read", "asset_types:read"))
+    """
+    def dependency(current_user: User = Depends(get_current_user)) -> User:
+        if current_user.is_superadmin:
+            return current_user
+
+        if any(check_permission(current_user, p) for p in any_permissions):
+            return current_user
+
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Missing permissions: {', '.join(any_permissions)}",
+        )
+
+    return dependency

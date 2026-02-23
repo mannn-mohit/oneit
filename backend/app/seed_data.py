@@ -45,12 +45,21 @@ def seed():
             ("assets:delete", "Delete Assets", "Delete assets", "assets"),
             ("assets:assign", "Assign Assets", "Assign assets to users", "assets"),
             ("assets:import", "Import Assets", "Bulk import assets", "assets"),
+            # Components
+            ("components:read", "View Components", "View all components", "inventory"),
+            ("components:manage", "Manage Components", "Create, update, delete components", "inventory"),
+            # Accessories
+            ("accessories:read", "View Accessories", "View all accessories", "inventory"),
+            ("accessories:manage", "Manage Accessories", "Create, update, delete accessories", "inventory"),
             # Tickets
             ("tickets:read", "View Tickets", "View all tickets", "tickets"),
             ("tickets:create", "Create Tickets", "Create new tickets", "tickets"),
             ("tickets:update", "Update Tickets", "Update tickets", "tickets"),
             ("tickets:delete", "Delete Tickets", "Delete tickets", "tickets"),
             ("tickets:assign", "Assign Tickets", "Assign tickets to agents", "tickets"),
+            # Teams
+            ("teams:read", "View Teams", "View teams and members", "admin"),
+            ("teams:manage", "Manage Teams", "Create, update, delete teams and members", "admin"),
             # Users
             ("users:read", "View Users", "View all users", "admin"),
             ("users:create", "Create Users", "Create new users", "admin"),
@@ -94,6 +103,9 @@ def seed():
                 "assets:import", "tickets:read", "tickets:create", "tickets:update",
                 "tickets:assign", "users:read", "asset_types:read",
                 "asset_types:manage", "reports:view",
+                "components:read", "components:manage",
+                "accessories:read", "accessories:manage",
+                "teams:read",
             ]
         ]
         db.add(it_manager_role)
@@ -107,6 +119,8 @@ def seed():
             permissions[p] for p in [
                 "assets:read", "assets:update", "tickets:read", "tickets:create",
                 "tickets:update", "users:read",
+                "components:read",
+                "accessories:read",
             ]
         ]
         db.add(support_role)
@@ -127,7 +141,7 @@ def seed():
 
         # --- Default Admin User ---
         admin_user = User(
-            email="admin@oneit.local",
+            email="admin@oneit.com",
             username="admin",
             full_name="System Administrator",
             hashed_password=get_password_hash("admin123"),

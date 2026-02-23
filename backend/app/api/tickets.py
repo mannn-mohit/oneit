@@ -11,7 +11,7 @@ from app.schemas.role_ticket import (
 )
 from app.services.ticket_service import TicketService
 from app.services.audit_service import AuditService
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_permissions
 
 router = APIRouter()
 
@@ -49,9 +49,14 @@ async def list_tickets(
     current_user: User = Depends(get_current_user),
 ):
     """List tickets with filtering, search, and pagination."""
+    viewer_id = None
+    if not current_user.is_superadmin:
+        viewer_id = current_user.id
+
     tickets, total = TicketService.get_tickets(
         db, skip=skip, limit=limit, status=status,
         priority=priority, assigned_to=assigned_to, search=search,
+        viewer_id=viewer_id,
     )
     return TicketListResponse(
         tickets=[_ticket_to_response(t) for t in tickets],
@@ -62,10 +67,11 @@ async def list_tickets(
 @router.get("/stats")
 async def get_ticket_stats(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permissions("tickets:read")),
 ):
     """Get ticket statistics for the dashboard."""
-    return TicketService.get_ticket_stats(db)
+    viewer_id = None if current_user.is_superadmin else current_user.id
+    return TicketService.get_ticket_stats(db, viewer_id=viewer_id)
 
 
 @router.get("/{ticket_id}", response_model=TicketResponse)
@@ -78,6 +84,11 @@ async def get_ticket(
     ticket = TicketService.get_ticket(db, ticket_id)
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
+
+    if not current_user.is_superadmin:
+        if ticket.created_by != current_user.id and ticket.assigned_to != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized to view this ticket")
+
     return _ticket_to_response(ticket)
 
 
@@ -110,7 +121,7 @@ async def update_ticket(
     ticket_id: UUID,
     update_data: TicketUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permissions("tickets:update")),
 ):
     """Update a ticket."""
     ticket = TicketService.update_ticket(
@@ -132,7 +143,7 @@ async def update_ticket(
 async def delete_ticket(
     ticket_id: UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permissions("tickets:delete")),
 ):
     """Delete a ticket."""
     ticket = TicketService.get_ticket(db, ticket_id)

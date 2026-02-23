@@ -48,6 +48,7 @@ class UserResponse(UserBase):
     role_id: Optional[UUID] = None
     role_name: Optional[str] = None
     sso_provider: Optional[str] = None
+    permissions: Optional[List[str]] = None
     created_at: datetime
     last_login: Optional[datetime] = None
 

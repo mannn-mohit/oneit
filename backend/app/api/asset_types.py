@@ -12,7 +12,7 @@ from app.schemas.asset import (
     AssetTypeCreate, AssetTypeUpdate, AssetTypeResponse,
     AssetTypeListResponse, FieldDefinitionCreate, FieldDefinitionResponse,
 )
-from app.api.deps import get_current_user
+from app.api.deps import require_any_permissions, require_permissions, require_superadmin
 
 router = APIRouter()
 
@@ -20,7 +20,7 @@ router = APIRouter()
 @router.get("/", response_model=AssetTypeListResponse)
 async def list_asset_types(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_any_permissions("assets:read", "asset_types:read")),
 ):
     """List all asset types with their field definitions."""
     asset_types = db.query(AssetType).all()
@@ -59,7 +59,7 @@ async def list_asset_types(
 async def get_asset_type(
     asset_type_id: UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_any_permissions("assets:read", "asset_types:read")),
 ):
     """Get a specific asset type with its field definitions."""
     at = db.query(AssetType).filter(AssetType.id == asset_type_id).first()
@@ -94,7 +94,7 @@ async def get_asset_type(
 async def create_asset_type(
     data: AssetTypeCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permissions("asset_types:manage")),
 ):
     """Create a new asset type with field definitions."""
     existing = db.query(AssetType).filter(AssetType.slug == data.slug).first()
@@ -151,7 +151,7 @@ async def update_asset_type(
     asset_type_id: UUID,
     update_data: AssetTypeUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permissions("asset_types:manage")),
 ):
     """Update an asset type."""
     at = db.query(AssetType).filter(AssetType.id == asset_type_id).first()
@@ -200,7 +200,7 @@ async def add_field_definition(
     asset_type_id: UUID,
     field_data: FieldDefinitionCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permissions("asset_types:manage")),
 ):
     """Add a field definition to an asset type."""
     at = db.query(AssetType).filter(AssetType.id == asset_type_id).first()
@@ -232,7 +232,7 @@ async def add_field_definition(
 async def delete_asset_type(
     asset_type_id: UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permissions("asset_types:manage")),
 ):
     """Delete an asset type and its field definitions."""
     at = db.query(AssetType).filter(AssetType.id == asset_type_id).first()

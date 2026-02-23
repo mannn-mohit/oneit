@@ -5,16 +5,24 @@ import { useParams, useRouter } from 'next/navigation';
 import TopBar from '@/components/TopBar';
 import StatusBadge from '@/components/StatusBadge';
 import DynamicFormRenderer from '@/components/DynamicFormRenderer';
-import api, { Asset, AssetType } from '@/services/api';
+import api, { Asset, AssetType, User } from '@/services/api';
+import { useAuth } from '@/hooks/useAuth';
+import { hasPermission } from '@/utils/permissions';
 
 export default function AssetDetailPage() {
     const params = useParams();
     const router = useRouter();
+    const { user } = useAuth();
     const [asset, setAsset] = useState<Asset | null>(null);
     const [assetType, setAssetType] = useState<AssetType | null>(null);
+    const [users, setUsers] = useState<User[]>([]);
     const [editing, setEditing] = useState(false);
     const [loading, setLoading] = useState(true);
     const [form, setForm] = useState<Partial<Asset>>({});
+
+    const canEdit = hasPermission(user, 'assets:update');
+    const canDelete = hasPermission(user, 'assets:delete');
+    const canAssign = hasPermission(user, 'assets:assign') && hasPermission(user, 'users:read');
 
     useEffect(() => {
         const id = params.id as string;
@@ -27,9 +35,12 @@ export default function AssetDetailPage() {
                     setAssetType(type || null);
                 });
             }
+            if (canAssign) {
+                api.getUsers().then(res => setUsers(res.users)).catch(() => { });
+            }
             setLoading(false);
         });
-    }, [params.id]);
+    }, [params.id, canAssign]);
 
     const handleSave = async () => {
         const id = params.id as string;
@@ -39,6 +50,10 @@ export default function AssetDetailPage() {
             notes: form.notes || undefined,
             status: form.status || undefined,
             metadata_fields: form.metadata_fields as Record<string, unknown> | undefined,
+            assigned_to: form.assigned_to || undefined,
+            purchase_cost: form.purchase_cost || undefined,
+            purchase_date: form.purchase_date || undefined,
+            warranty_expiry: form.warranty_expiry || undefined,
         });
         const updated = await api.getAsset(id);
         setAsset(updated);
@@ -59,6 +74,7 @@ export default function AssetDetailPage() {
                     {!editing ? (
                         <button
                             onClick={() => setEditing(true)}
+                            disabled={!canEdit}
                             className="px-5 py-2 bg-blue-50 text-blue-600 text-sm font-medium rounded-xl hover:bg-blue-100"
                         >
                             Edit
@@ -74,6 +90,19 @@ export default function AssetDetailPage() {
                         </>
                     )}
                     <button onClick={() => router.back()} className="px-5 py-2 text-slate-500 text-sm hover:text-slate-700">← Back</button>
+                    {!editing && canDelete && (
+                        <button
+                            onClick={async () => {
+                                if (confirm('Are you sure you want to delete this asset?')) {
+                                    await api.deleteAsset(asset.id);
+                                    router.push('/assets');
+                                }
+                            }}
+                            className="px-5 py-2 bg-red-50 text-red-600 text-sm font-medium rounded-xl hover:bg-red-100 ml-auto"
+                        >
+                            Delete Asset
+                        </button>
+                    )}
                 </div>
 
                 {/* Details */}
@@ -135,16 +164,49 @@ export default function AssetDetailPage() {
                                 </div>
                                 <div>
                                     <label className="block text-xs font-medium text-slate-500 mb-1">Assigned To</label>
-                                    <p className="text-sm text-slate-800">{asset.assigned_to_name || 'Unassigned'}</p>
+                                    {editing && canAssign ? (
+                                        <select value={form.assigned_to || ''} onChange={(e) => setForm({ ...form, assigned_to: e.target.value })}
+                                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50">
+                                            <option value="">Unassigned</option>
+                                            {users.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+                                        </select>
+                                    ) : (
+                                        <p className="text-sm text-slate-800">{asset.assigned_to_name || 'Unassigned'}</p>
+                                    )}
                                 </div>
                                 <div>
                                     <label className="block text-xs font-medium text-slate-500 mb-1">Purchase Cost</label>
-                                    <p className="text-sm text-slate-800">{asset.purchase_cost || '—'}</p>
+                                    {editing ? (
+                                        <input type="text" value={form.purchase_cost || ''} onChange={(e) => setForm({ ...form, purchase_cost: e.target.value })}
+                                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50" />
+                                    ) : (
+                                        <p className="text-sm text-slate-800">{asset.purchase_cost || '—'}</p>
+                                    )}
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-500 mb-1">Created</label>
-                                    <p className="text-sm text-slate-800">{new Date(asset.created_at).toLocaleDateString()}</p>
+                                    <label className="block text-xs font-medium text-slate-500 mb-1">Purchase Date</label>
+                                    {editing ? (
+                                        <input type="date" value={form.purchase_date || ''} onChange={(e) => setForm({ ...form, purchase_date: e.target.value })}
+                                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50" />
+                                    ) : (
+                                        <p className="text-sm text-slate-800">{asset.purchase_date ? new Date(asset.purchase_date).toLocaleDateString() : '—'}</p>
+                                    )}
                                 </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-slate-500 mb-1">Warranty Expiry</label>
+                                    {editing ? (
+                                        <input type="date" value={form.warranty_expiry || ''} onChange={(e) => setForm({ ...form, warranty_expiry: e.target.value })}
+                                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50" />
+                                    ) : (
+                                        <p className="text-sm text-slate-800">{asset.warranty_expiry ? new Date(asset.warranty_expiry).toLocaleDateString() : '—'}</p>
+                                    )}
+                                </div>
+                                {!editing && (
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-500 mb-1">Created</label>
+                                        <p className="text-sm text-slate-800">{new Date(asset.created_at).toLocaleDateString()}</p>
+                                    </div>
+                                )}
                             </div>
                         </div>
 

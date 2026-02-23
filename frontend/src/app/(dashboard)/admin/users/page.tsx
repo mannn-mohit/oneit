@@ -2,14 +2,16 @@
 
 import React, { useEffect, useState } from 'react';
 import TopBar from '@/components/TopBar';
-import api, { User } from '@/services/api';
+import api, { User, Role } from '@/services/api';
 
 export default function UsersAdminPage() {
     const [users, setUsers] = useState<User[]>([]);
+    const [roles, setRoles] = useState<Role[]>([]);
     const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [showForm, setShowForm] = useState(false);
+    const [editingUserId, setEditingUserId] = useState<string | null>(null);
     const [form, setForm] = useState({ email: '', username: '', full_name: '', password: '', role_id: '' });
     const [error, setError] = useState('');
 
@@ -21,18 +23,45 @@ export default function UsersAdminPage() {
         setLoading(false);
     };
 
-    useEffect(() => { fetchUsers(); }, [search]);
+    const fetchRoles = async () => {
+        try {
+            const data = await api.getRoles();
+            setRoles(data.roles);
+        } catch (e) { }
+    };
 
-    const handleCreate = async (e: React.FormEvent) => {
+    useEffect(() => {
+        fetchUsers();
+        fetchRoles();
+    }, [search]);
+
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
         try {
-            await api.createUser(form);
+            const payload = { ...form };
+            if (!payload.role_id) delete (payload as any).role_id;
+            if (editingUserId && !payload.password) delete (payload as any).password;
+
+            if (editingUserId) {
+                await api.updateUser(editingUserId, payload as any);
+            } else {
+                await api.createUser(payload);
+            }
             setShowForm(false);
+            setEditingUserId(null);
             setForm({ email: '', username: '', full_name: '', password: '', role_id: '' });
             fetchUsers();
-        } catch (err: unknown) {
-            setError(err instanceof Error ? err.message : 'Failed to create user');
+        } catch (err: any) {
+            let msg = err.message || 'Failed to create user';
+            // Parse Pydantic validation array string if present
+            try {
+                const parsed = JSON.parse(msg);
+                if (Array.isArray(parsed)) {
+                    msg = parsed.map(p => `${p.loc.join('.')}: ${p.msg}`).join(', ');
+                }
+            } catch (e) { }
+            setError(msg);
         }
     };
 
@@ -51,14 +80,19 @@ export default function UsersAdminPage() {
                         <input type="text" placeholder="Search users..." value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             className="flex-1 px-4 py-2.5 bg-slate-50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50" />
-                        <button onClick={() => setShowForm(!showForm)}
+                        <button onClick={() => {
+                            setEditingUserId(null);
+                            setForm({ email: '', username: '', full_name: '', password: '', role_id: '' });
+                            setShowForm(!showForm);
+                        }}
                             className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-purple-600 text-white text-sm font-medium rounded-xl hover:from-blue-600 hover:to-purple-700 shadow-lg shadow-blue-500/20 whitespace-nowrap">
                             + Add User
                         </button>
                     </div>
 
                     {showForm && (
-                        <form onSubmit={handleCreate} className="mt-4 p-4 bg-slate-50 rounded-xl space-y-3 animate-fadeIn">
+                        <form onSubmit={handleSubmit} className="mt-4 p-4 bg-slate-50 rounded-xl space-y-3 animate-fadeIn">
+                            <h3 className="text-sm font-semibold text-slate-800">{editingUserId ? 'Edit User' : 'Add New User'}</h3>
                             {error && <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">{error}</div>}
                             <div className="grid grid-cols-2 gap-3">
                                 <input type="text" required placeholder="Full Name" value={form.full_name}
@@ -70,13 +104,23 @@ export default function UsersAdminPage() {
                                 <input type="text" required placeholder="Username" value={form.username}
                                     onChange={(e) => setForm({ ...form, username: e.target.value })}
                                     className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50" />
-                                <input type="password" required placeholder="Password" value={form.password}
+                                <input type="password" required={!editingUserId} placeholder={editingUserId ? "Leave blank to keep current password" : "Password"} value={form.password}
                                     onChange={(e) => setForm({ ...form, password: e.target.value })}
                                     className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50" />
+                                <select
+                                    className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                                    value={form.role_id}
+                                    onChange={(e) => setForm({ ...form, role_id: e.target.value })}
+                                >
+                                    <option value="">No Role / Standard User</option>
+                                    {roles.map(r => (
+                                        <option key={r.id} value={r.id}>{r.name}</option>
+                                    ))}
+                                </select>
                             </div>
                             <div className="flex gap-2">
-                                <button type="submit" className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg">Create</button>
-                                <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 bg-slate-200 text-slate-700 text-sm font-medium rounded-lg">Cancel</button>
+                                <button type="submit" className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg">{editingUserId ? 'Save Changes' : 'Create'}</button>
+                                <button type="button" onClick={() => { setShowForm(false); setEditingUserId(null); }} className="px-4 py-2 bg-slate-200 text-slate-700 text-sm font-medium rounded-lg">Cancel</button>
                             </div>
                         </form>
                     )}
@@ -126,10 +170,34 @@ export default function UsersAdminPage() {
                                     <td className="px-6 py-4 text-sm text-slate-500">
                                         {user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}
                                     </td>
-                                    <td className="px-6 py-4 text-right">
+                                    <td className="px-6 py-4 text-right flex items-center justify-end gap-2">
                                         <button onClick={() => toggleActive(user)}
                                             className={`px-3 py-1 text-xs font-medium rounded-lg ${user.is_active ? 'text-red-600 hover:bg-red-50' : 'text-emerald-600 hover:bg-emerald-50'}`}>
                                             {user.is_active ? 'Deactivate' : 'Activate'}
+                                        </button>
+                                        <button onClick={() => {
+                                            setEditingUserId(user.id);
+                                            setForm({
+                                                email: user.email,
+                                                username: user.username,
+                                                full_name: user.full_name,
+                                                password: '',
+                                                role_id: user.role_id || ''
+                                            });
+                                            setShowForm(true);
+                                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                                        }} className="px-3 py-1 text-xs font-medium rounded-lg text-slate-500 hover:bg-slate-100">
+                                            Edit
+                                        </button>
+                                        <button onClick={async () => {
+                                            if (confirm(`Are you sure you want to delete ${user.full_name}?`)) {
+                                                try {
+                                                    await api.deleteUser(user.id);
+                                                    fetchUsers();
+                                                } catch (err: any) { alert(err.message); }
+                                            }
+                                        }} className="px-3 py-1 text-xs font-medium rounded-lg text-slate-500 hover:bg-slate-100">
+                                            Delete
                                         </button>
                                     </td>
                                 </tr>

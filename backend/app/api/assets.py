@@ -12,7 +12,7 @@ from app.schemas.asset import (
 )
 from app.services.asset_service import AssetService
 from app.services.audit_service import AuditService
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_permissions
 
 router = APIRouter()
 
@@ -51,6 +51,9 @@ async def list_assets(
     current_user: User = Depends(get_current_user),
 ):
     """List assets with filtering, search, and pagination."""
+    if not current_user.is_superadmin:
+        assigned_to = current_user.id
+
     assets, total = AssetService.get_assets(
         db, skip=skip, limit=limit, status=status,
         asset_type_id=asset_type_id, search=search, assigned_to=assigned_to,
@@ -64,10 +67,11 @@ async def list_assets(
 @router.get("/stats")
 async def get_asset_stats(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permissions("assets:read")),
 ):
     """Get asset statistics for the dashboard."""
-    return AssetService.get_asset_stats(db)
+    viewer_id = None if current_user.is_superadmin else current_user.id
+    return AssetService.get_asset_stats(db, viewer_id=viewer_id)
 
 
 @router.get("/{asset_id}", response_model=AssetResponse)
@@ -80,6 +84,10 @@ async def get_asset(
     asset = AssetService.get_asset(db, asset_id)
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
+    
+    if not current_user.is_superadmin and asset.assigned_to != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to view this asset")
+
     return _asset_to_response(asset)
 
 
@@ -87,7 +95,7 @@ async def get_asset(
 async def create_asset(
     asset_data: AssetCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permissions("assets:create")),
 ):
     """Create a new asset."""
     asset = AssetService.create_asset(db, asset_data.model_dump())
@@ -103,7 +111,7 @@ async def update_asset(
     asset_id: UUID,
     update_data: AssetUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permissions("assets:update")),
 ):
     """Update an existing asset."""
     asset = AssetService.update_asset(
@@ -122,7 +130,7 @@ async def update_asset(
 async def delete_asset(
     asset_id: UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permissions("assets:delete")),
 ):
     """Delete an asset."""
     success = AssetService.delete_asset(db, asset_id)
@@ -139,7 +147,7 @@ async def assign_asset(
     asset_id: UUID,
     assignment: AssetAssign,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permissions("assets:assign")),
 ):
     """Assign or unassign an asset to/from a user."""
     asset = AssetService.assign_asset(db, asset_id, assignment.user_id)
@@ -157,7 +165,7 @@ async def assign_asset(
 async def bulk_import_assets(
     bulk_data: AssetBulkImport,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permissions("assets:import")),
 ):
     """Bulk import multiple assets."""
     assets = AssetService.bulk_create_assets(

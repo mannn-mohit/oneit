@@ -8,7 +8,7 @@ from app.core.database import get_db
 from app.core.security import get_password_hash
 from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate, UserResponse, UserListResponse
-from app.api.deps import get_current_user, require_superadmin
+from app.api.deps import require_permissions
 
 router = APIRouter()
 
@@ -20,7 +20,7 @@ async def list_users(
     search: Optional[str] = None,
     is_active: Optional[bool] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permissions("users:read")),
 ):
     """List all users with optional search and filters."""
     query = db.query(User)
@@ -62,7 +62,7 @@ async def list_users(
 async def get_user(
     user_id: UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permissions("users:read")),
 ):
     """Get a specific user by ID."""
     user = db.query(User).filter(User.id == user_id).first()
@@ -87,7 +87,7 @@ async def get_user(
 async def create_user(
     user_data: UserCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_superadmin),
+    current_user: User = Depends(require_permissions("users:create")),
 ):
     """Create a new user (admin only)."""
     existing = db.query(User).filter(
@@ -128,7 +128,7 @@ async def update_user(
     user_id: UUID,
     update_data: UserUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_superadmin),
+    current_user: User = Depends(require_permissions("users:update")),
 ):
     """Update a user (admin only)."""
     user = db.query(User).filter(User.id == user_id).first()
@@ -169,7 +169,7 @@ async def update_user(
 async def delete_user(
     user_id: UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_superadmin),
+    current_user: User = Depends(require_permissions("users:delete")),
 ):
     """Delete a user (admin only)."""
     user = db.query(User).filter(User.id == user_id).first()

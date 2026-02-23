@@ -5,6 +5,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.rbac import get_user_permissions
 from app.core.security import verify_password, create_access_token, get_password_hash
 from app.models.user import User
 from app.schemas.user import LoginRequest, TokenResponse, UserCreate, UserResponse
@@ -105,6 +106,7 @@ async def get_me(current_user: User = Depends(get_current_user)):
         role_id=current_user.role_id,
         role_name=current_user.role.name if current_user.role else None,
         sso_provider=current_user.sso_provider,
+        permissions=get_user_permissions(current_user),
         created_at=current_user.created_at,
         last_login=current_user.last_login,
     )

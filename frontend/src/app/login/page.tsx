@@ -1,15 +1,20 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/services/api';
 
 export default function LoginPage() {
+    const [settings, setSettings] = useState({ app_name: 'OneIT', app_icon: 'O' });
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const router = useRouter();
+
+    useEffect(() => {
+        api.getSettings().then(d => setSettings(d)).catch(() => { });
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -38,9 +43,9 @@ export default function LoginPage() {
             <div className="relative z-10 w-full max-w-md mx-4">
                 <div className="text-center mb-8">
                     <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 mb-4 shadow-2xl shadow-blue-500/25">
-                        <span className="text-white font-bold text-2xl">O</span>
+                        <span className="text-white font-bold text-2xl">{settings.app_icon}</span>
                     </div>
-                    <h1 className="text-3xl font-bold text-white mb-2">OneIT</h1>
+                    <h1 className="text-3xl font-bold text-white mb-2">{settings.app_name}</h1>
                     <p className="text-blue-200/80">IT Asset Management Platform</p>
                 </div>
 

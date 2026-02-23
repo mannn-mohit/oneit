@@ -5,13 +5,17 @@ import { useRouter } from 'next/navigation';
 import TopBar from '@/components/TopBar';
 import DynamicFormRenderer from '@/components/DynamicFormRenderer';
 import api, { AssetType } from '@/services/api';
+import { useAuth } from '@/hooks/useAuth';
+import { hasPermission } from '@/utils/permissions';
 
 export default function NewAssetPage() {
     const router = useRouter();
+    const { user } = useAuth();
     const [assetTypes, setAssetTypes] = useState<AssetType[]>([]);
     const [selectedType, setSelectedType] = useState<AssetType | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const canCreate = hasPermission(user, 'assets:create');
 
     const [form, setForm] = useState({
         name: '',
@@ -35,6 +39,10 @@ export default function NewAssetPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!canCreate) {
+            setError('Not authorized to create assets.');
+            return;
+        }
         setLoading(true);
         setError('');
         try {
@@ -57,6 +65,11 @@ export default function NewAssetPage() {
                 <form onSubmit={handleSubmit} className="space-y-6">
                     {error && (
                         <div className="p-4 rounded-xl bg-red-50 border border-red-100 text-red-700 text-sm">{error}</div>
+                    )}
+                    {!canCreate && (
+                        <div className="p-4 rounded-xl bg-amber-50 border border-amber-100 text-amber-800 text-sm">
+                            You don’t have permission to create assets.
+                        </div>
                     )}
 
                     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4">

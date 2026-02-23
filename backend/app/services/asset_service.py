@@ -134,13 +134,17 @@ class AssetService:
         return assets
 
     @staticmethod
-    def get_asset_stats(db: Session) -> dict:
+    def get_asset_stats(db: Session, viewer_id: Optional[UUID] = None) -> dict:
         """Get asset statistics for the dashboard."""
-        total = db.query(func.count(Asset.id)).scalar()
-        available = db.query(func.count(Asset.id)).filter(Asset.status == "available").scalar()
-        assigned = db.query(func.count(Asset.id)).filter(Asset.status == "assigned").scalar()
-        maintenance = db.query(func.count(Asset.id)).filter(Asset.status == "maintenance").scalar()
-        retired = db.query(func.count(Asset.id)).filter(Asset.status == "retired").scalar()
+        base_query = db.query(Asset)
+        if viewer_id:
+            base_query = base_query.filter(Asset.assigned_to == viewer_id)
+
+        total = base_query.with_entities(func.count(Asset.id)).scalar()
+        available = base_query.with_entities(func.count(Asset.id)).filter(Asset.status == "available").scalar()
+        assigned = base_query.with_entities(func.count(Asset.id)).filter(Asset.status == "assigned").scalar()
+        maintenance = base_query.with_entities(func.count(Asset.id)).filter(Asset.status == "maintenance").scalar()
+        retired = base_query.with_entities(func.count(Asset.id)).filter(Asset.status == "retired").scalar()
 
         return {
             "total": total,

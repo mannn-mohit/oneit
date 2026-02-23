@@ -6,6 +6,9 @@ from app.models.field_definition import FieldDefinition
 from app.models.asset import Asset
 from app.models.audit_log import AuditLog
 from app.models.ticket import Ticket, TicketAsset
+from app.models.component import Component, ComponentAssignment
+from app.models.accessory import Accessory, AccessoryAssignment
+from app.models.import_job import ImportJob, ImportMapping, ImportRowResult
 
 __all__ = [
     "User",
@@ -18,4 +21,11 @@ __all__ = [
     "AuditLog",
     "Ticket",
     "TicketAsset",
+    "Component",
+    "ComponentAssignment",
+    "Accessory",
+    "AccessoryAssignment",
+    "ImportJob",
+    "ImportMapping",
+    "ImportRowResult",
 ]
